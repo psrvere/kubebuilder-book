@@ -7,4 +7,14 @@ layout:
 - go.kubebuilder.io/v4
 projectName: kubebuilder-book
 repo: github.com/psrvere/kubebuilder-book
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: psrvere.in
+  group: batch
+  kind: CronJob
+  path: github.com/psrvere/kubebuilder-book/api/v1
+  version: v1
 version: "3"
