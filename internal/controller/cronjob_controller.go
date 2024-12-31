@@ -30,7 +30,6 @@ import (
 
 	batchapi "github.com/psrvere/kubebuilder-book/api/v1"
 	batchv1 "k8s.io/api/batch/v1"
-	kbatch "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ref "k8s.io/client-go/tools/reference"
@@ -84,22 +83,22 @@ func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// 2. List all active jobs, and update the status
-	var childJobs kbatch.JobList
+	var childJobs batchv1.JobList
 	if err := r.List(ctx, &childJobs, client.InNamespace(req.Namespace), client.MatchingFields{"jobOwnerKey": req.Name}); err != nil {
 		log.Error(err, "failed to list child jobs")
 		return ctrl.Result{}, err
 	}
 
 	// find the active list of jobs
-	var activeJobs []*kbatch.Job
-	var successfulJobs []*kbatch.Job
-	var failedJobs []*kbatch.Job
+	var activeJobs []*batchv1.Job
+	var successfulJobs []*batchv1.Job
+	var failedJobs []*batchv1.Job
 	var mostRecentTime *time.Time
 
 	// define job finished function
-	isJobFinished := func(job *kbatch.Job) (bool, kbatch.JobConditionType) {
+	isJobFinished := func(job *batchv1.Job) (bool, batchv1.JobConditionType) {
 		for _, c := range job.Status.Conditions {
-			if (c.Type == kbatch.JobComplete || c.Type == kbatch.JobFailed) && c.Status == corev1.ConditionTrue {
+			if (c.Type == batchv1.JobComplete || c.Type == batchv1.JobFailed) && c.Status == corev1.ConditionTrue {
 				return true, c.Type
 			}
 		}
@@ -107,7 +106,7 @@ func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// define function to get schedule time
-	getScheduledTimeForJob := func(job *kbatch.Job) (*time.Time, error) {
+	getScheduledTimeForJob := func(job *batchv1.Job) (*time.Time, error) {
 		timeRaw := job.Annotations[scheduledTimeAnnotation]
 		if len(timeRaw) == 0 {
 			return nil, nil
@@ -125,9 +124,9 @@ func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		switch finishedType {
 		case "": // ongoing
 			activeJobs = append(activeJobs, &job)
-		case kbatch.JobComplete:
+		case batchv1.JobComplete:
 			successfulJobs = append(successfulJobs, &job)
-		case kbatch.JobFailed:
+		case batchv1.JobFailed:
 			failedJobs = append(failedJobs, &job)
 		}
 
@@ -284,9 +283,9 @@ func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 
-	constructJobForCronJob := func(cronJob *batchv1.CronJob, scheduledTime time.Time) (*kbatch.Job, error) {
+	constructJobForCronJob := func(cronJob *batchv1.CronJob, scheduledTime time.Time) (*batchv1.Job, error) {
 		name := fmt.Sprintf("%s-%d", cronJob.Name, scheduledTime.Unix()) // unique name
-		job := &kbatch.Job{
+		job := &batchv1.Job{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels:      make(map[string]string),
 				Annotations: make(map[string]string),
@@ -333,8 +332,8 @@ func (r *CronJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		r.Clock = realClock{}
 	}
 
-	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &kbatch.Job{}, jobOwnerKey, func(rawObj client.Object) []string {
-		job := rawObj.(*kbatch.Job)
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &batchv1.Job{}, jobOwnerKey, func(rawObj client.Object) []string {
+		job := rawObj.(*batchv1.Job)
 		owner := metav1.GetControllerOf(job)
 		if owner == nil {
 			return nil
@@ -349,7 +348,7 @@ func (r *CronJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&batchv1.CronJob{}).
-		Owns(&kbatch.Job{}).
+		Owns(&batchv1.Job{}).
 		Named("cronjob").
 		Complete(r)
 }
